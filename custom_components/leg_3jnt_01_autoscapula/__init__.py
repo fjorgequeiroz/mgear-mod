@@ -824,7 +824,7 @@ class Component(component.Main):
         pm.connectAttr(self.autoScapula_att, mul_auto + ".input2X")
 
         # connect angle to scapula_npo.rotateZ
-        pm.connectAttr(mul_auto + ".outputX", self.scapula_npo + ".rotateZ")
+        pm.connectAttr(mul_auto + ".outputX", self.scapula_npo + ".rotateX")
 
         # ── Original leg_3jnt_01 operators (unchanged) ────────────────────
 
