@@ -44,12 +44,15 @@ class Guide(guide.ComponentGuide):
 
     def postInit(self):
         """Initialize the position for the guide"""
-        self.save_transform = ["root", "knee", "ankle", "foot", "eff"]
+        self.save_transform = ["root", "scapula", "knee", "ankle", "foot", "eff"]
 
     def addObjects(self):
         """Add the Guide Root, blade and locators"""
         lockAttrs = ["tx", "ry", "rz"]
         self.root = self.addRoot()
+        # scapula loc: one segment above the shoulder (root)
+        vTemp = transform.getOffsetPosition(self.root, [0, 3, 0])
+        self.scapula = self.addLoc("scapula", self.root, vTemp)
         vTemp = transform.getOffsetPosition(self.root, [0, -3, 0.1])
         self.knee = self.addLoc("knee", self.root, vTemp)
         attribute.lockAttribute(self.knee, lockAttrs)
@@ -62,7 +65,7 @@ class Guide(guide.ComponentGuide):
         vTemp = transform.getOffsetPosition(self.root, [0, -9, 1])
         self.eff = self.addLoc("eff", self.foot, vTemp)
 
-        centers = [self.root, self.knee, self.ankle, self.foot, self.eff]
+        centers = [self.scapula, self.root, self.knee, self.ankle, self.foot, self.eff]
         self.dispcrv = self.addDispCurve("crv1", centers)
 
         self.addUpvLocator(self.knee, self.ankle, self.eff)
