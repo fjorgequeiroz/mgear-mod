@@ -1,16 +1,17 @@
 """Component Leg 3 joints 01 with Auto-Scapula module
 
-Based on leg_3jnt_01 by Miquel Campos.
-Adds an auto-scapula joint that aims toward the foot IK target,
-simulating how a horse/quadruped shoulder blade rotates as the leg
-extends forward.
+Extension of leg_3jnt_01. Adds a scapula_ctl at the shoulder position that
+auto-rotates based on the angle between the shoulder (root) and foot IK target.
 
-The scapula_ctl sits at the root of the leg and drives a blended
-aim constraint. The entire leg hierarchy lives under this control,
-so the scapula rotation is inherited by every downstream bone.
+The auto-rotation is computed entirely with DG node connections (no constraints):
+  - A pointMatrixMult decomposes the ik_ctl world position into scapula_npo
+    local space
+  - An animCurveUU samples atan(localZ / -localY) to get the swing angle
+  - The result is multiplied by autoScapula (0-1) and connected to
+    scapula_npo.rotateZ
 
-New attribute:
-    autoScapula  (0-1)  — 0 = fully manual, 1 = fully driven by foot IK
+The leg hierarchy is exactly leg_3jnt_01 — all bones/controls under self.root.
+scapula_ctl is a sibling of root_npo, so there is zero double-transformation.
 """
 
 import mgear.pymaya as pm
@@ -57,19 +58,16 @@ class Component(component.Main):
             self.guide.apos[3], self.guide.apos[4]
         )
 
-        # ── Scapula ──────────────────────────────────────────────────────────
-        # The scapula_npo holds the auto-aim offset; scapula_ctl is the
-        # manual override on top.  Everything else parents under scapula_ctl.
+        # ── Scapula control ──────────────────────────────────────────────
+        # Sibling of root_npo — does NOT parent anything in the leg hierarchy.
+        # Its rotation is driven purely by DG connections in addOperators.
         t_root = transform.getTransformFromPos(self.guide.apos[0])
 
         self.scapula_npo = primitive.addTransform(
             self.root, self.getName("scapula_npo"), t_root
         )
-        self.scapula_aim = primitive.addTransform(
-            self.scapula_npo, self.getName("scapula_aim"), t_root
-        )
         self.scapula_ctl = self.addCtl(
-            self.scapula_aim,
+            self.scapula_npo,
             "scapula_ctl",
             t_root,
             self.color_fk,
@@ -82,12 +80,7 @@ class Component(component.Main):
         )
         attribute.setInvertMirror(self.scapula_ctl, ["tx", "ry", "rz"])
 
-        # Aim target: lives in world space at the foot IK position so the
-        # aimConstraint always points toward the actual foot destination.
-        t_foot = transform.getTransformFromPos(self.guide.pos["foot"])
-        self.scapulaAimTarget = primitive.addTransformFromPos(
-            self.root, self.getName("scapulaAimTarget"), self.guide.pos["foot"]
-        )
+        # ── Original leg_3jnt_01 objects (unmodified) ────────────────────
 
         # 3bones chain
         self.chain3bones = primitive.add2DChain(
@@ -109,9 +102,9 @@ class Component(component.Main):
             self.WIP,
         )
 
-        # Leg chain (parented under scapula_ctl so it inherits the rotation)
+        # Leg chain
         self.legBones = primitive.add2DChain(
-            self.scapula_ctl,
+            self.root,
             self.getName("legBones%s_jnt"),
             self.guide.apos[0:4],
             self.normal,
@@ -124,7 +117,7 @@ class Component(component.Main):
 
         # Leg chain FK ref
         self.legBonesFK = primitive.add2DChain(
-            self.scapula_ctl,
+            self.root,
             self.getName("legFK%s_jnt"),
             self.guide.apos[0:4],
             self.normal,
@@ -134,7 +127,7 @@ class Component(component.Main):
 
         # Leg chain IK ref
         self.legBonesIK = primitive.add2DChain(
-            self.scapula_ctl,
+            self.root,
             self.getName("legIK%s_jnt"),
             self.guide.apos[0:4],
             self.normal,
@@ -144,7 +137,7 @@ class Component(component.Main):
 
         # 1 bone chain for upv ref
         self.legChainUpvRef = primitive.add2DChain(
-            self.scapula_ctl,
+            self.root,
             self.getName("legUpvRef%s_jnt"),
             [self.guide.apos[0], self.guide.apos[3]],
             self.normal,
@@ -171,10 +164,10 @@ class Component(component.Main):
         self.mid2_jnt.attr("radius").set(3)
         self.mid2_jnt.setAttr("jointOrient", 0, 0, 0)
 
-        # ── Base / root controller (child of scapula_ctl) ─────────────────
+        # base Controllers
         t = transform.getTransformFromPos(self.guide.apos[0])
         self.root_npo = primitive.addTransform(
-            self.scapula_ctl, self.getName("root_npo"), t
+            self.root, self.getName("root_npo"), t
         )
         self.root_ctl = self.addCtl(
             self.root_npo,
@@ -187,7 +180,7 @@ class Component(component.Main):
         )
         attribute.lockAttribute(self.root_ctl, ["sx", "sy", "sz", "v"])
 
-        # FK Controllers -----------------------------------
+        # FK Controllers
         t = transform.getTransformLookingAt(
             self.guide.apos[0], self.guide.apos[1], self.normal, "xz", self.negate
         )
@@ -272,9 +265,9 @@ class Component(component.Main):
         for x in self.fk_ctl:
             attribute.setInvertMirror(x, ["tx", "ty", "tz"])
 
-        # Mid Controllers -----------------------------------
+        # Mid Controllers
         self.knee_lvl = primitive.addTransform(
-            self.scapula_ctl,
+            self.root,
             self.getName("knee_lvl"),
             transform.getTransform(self.mid1_jnt),
         )
@@ -291,7 +284,7 @@ class Component(component.Main):
         attribute.lockAttribute(self.knee_ctl, ["sx", "sy", "sz", "v"])
 
         self.ankle_lvl = primitive.addTransform(
-            self.scapula_ctl,
+            self.root,
             self.getName("ankle_lvl"),
             transform.getTransform(self.mid2_jnt),
         )
@@ -307,11 +300,10 @@ class Component(component.Main):
         attribute.setInvertMirror(self.ankle_ctl, ["tx", "ty", "tz"])
         attribute.lockAttribute(self.ankle_ctl, ["sx", "sy", "sz", "v"])
 
-        # IK Controls -------------------------------------------------------
+        # IK Controls
         t_align = transform.getTransformLookingAt(
             self.guide.apos[3], self.guide.apos[4], self.normal, "zx", False
         )
-
         if self.settings["ikOri"]:
             t = transform.getTransformFromPos(self.guide.pos["foot"])
         else:
@@ -390,7 +382,7 @@ class Component(component.Main):
         v += self.guide.apos[1]
 
         self.upv_lvl = primitive.addTransformFromPos(
-            self.scapula_ctl, self.getName("upv_lvl"), v
+            self.root, self.getName("upv_lvl"), v
         )
         self.upv_cns = primitive.addTransformFromPos(
             self.upv_lvl, self.getName("upv_cns"), v
@@ -407,7 +399,7 @@ class Component(component.Main):
         attribute.setInvertMirror(self.upv_ctl, ["tx"])
         attribute.setKeyableAttributes(self.upv_ctl, ["tx", "ty", "tz"])
 
-        # Soft IK 3 bones ---------------------------------------------------
+        # Soft IK 3 bones
         t = transform.getTransformLookingAt(
             self.guide.pos["root"], self.guide.pos["foot"], self.x_axis, "zx", False
         )
@@ -419,10 +411,10 @@ class Component(component.Main):
             self.aim_tra, self.getName("wristSoftIK"), t
         )
         self.softblendLoc = primitive.addTransform(
-            self.scapula_ctl, self.getName("softblendLoc"), t
+            self.root, self.getName("softblendLoc"), t
         )
 
-        # Soft IK 2 bones ---------------------------------------------------
+        # Soft IK 2 bones
         t = transform.getTransformLookingAt(
             self.guide.pos["root"], self.guide.pos["ankle"], self.x_axis, "zx", False
         )
@@ -434,7 +426,7 @@ class Component(component.Main):
             self.aim_tra2, self.getName("ankleSoftIK"), t
         )
         self.softblendLoc2 = primitive.addTransform(
-            self.scapula_ctl, self.getName("softblendLoc2"), t
+            self.root, self.getName("softblendLoc2"), t
         )
 
         # References
@@ -451,7 +443,7 @@ class Component(component.Main):
 
         # Twist references
         self.rollRef = primitive.add2DChain(
-            self.scapula_ctl,
+            self.root,
             self.getName("rollChain"),
             self.guide.apos[:2],
             self.normal,
@@ -514,7 +506,7 @@ class Component(component.Main):
         )
         self.tws3_drv.setAttr("sx", 0.001)
 
-        # Divisions ---------------------------------------------------------
+        # Divisions
         o_set = self.settings
         self.divisions = o_set["div0"] + o_set["div1"] + o_set["div2"] + 4
 
@@ -571,19 +563,19 @@ class Component(component.Main):
 
         # match IK FK references
         self.match_fk0_off = self.add_match_ref(
-            self.fk_ctl[1], self.scapula_ctl, "matchFk0_npo", False
+            self.fk_ctl[1], self.root, "matchFk0_npo", False
         )
         self.match_fk0 = self.add_match_ref(
             self.fk_ctl[0], self.match_fk0_off, "fk0_mth"
         )
         self.match_fk1_off = self.add_match_ref(
-            self.fk_ctl[2], self.scapula_ctl, "matchFk1_npo", False
+            self.fk_ctl[2], self.root, "matchFk1_npo", False
         )
         self.match_fk1 = self.add_match_ref(
             self.fk_ctl[1], self.match_fk1_off, "fk1_mth"
         )
         self.match_fk2_off = self.add_match_ref(
-            self.fk_ctl[3], self.scapula_ctl, "matchFk2_npo", False
+            self.fk_ctl[3], self.root, "matchFk2_npo", False
         )
         self.match_fk2 = self.add_match_ref(
             self.fk_ctl[2], self.match_fk2_off, "fk2_mth"
@@ -599,7 +591,6 @@ class Component(component.Main):
             self.upv_ctl, self.fk0_ctl, "upv_mth"
         )
 
-        # visual reference
         self.line_ref = icon.connection_display_curve(
             self.getName("visalRef"), [self.upv_ctl, self.knee_ctl]
         )
@@ -619,16 +610,12 @@ class Component(component.Main):
             1,
         )
 
+        # ── Leg attributes (identical to leg_3jnt_01) ─────────────────────
         self.blend_att = self.addAnimParam(
             "blend", "Fk/Ik Blend", "double", self.settings["blend"], 0, 1
         )
         self.fullIK_attr = self.addAnimParam(
-            "fullIK",
-            "Full 3 bones IK",
-            "double",
-            self.settings["full3BonesIK"],
-            0,
-            1,
+            "fullIK", "Full 3 bones IK", "double", self.settings["full3BonesIK"], 0, 1
         )
         self.soft_attr = self.addAnimParam(
             "softIKRange", "Soft IK Range", "double", 0.0001, 0.0001, 100
@@ -717,7 +704,6 @@ class Component(component.Main):
             "footSquash", "Foot Squash", "double", 1, 0.01, 1.9
         )
 
-        # Setup
         if self.guide.paramDefs["st_profile"].value:
             self.st_value = self.guide.paramDefs["st_profile"].value
             self.sq_value = self.guide.paramDefs["sq_profile"].value
@@ -764,37 +750,83 @@ class Component(component.Main):
     # OPERATORS
     # =====================================================
     def addOperators(self):
-        """Create operators and set the relations for the component rig."""
 
-        # ── Auto-Scapula ──────────────────────────────────────────────────
-        # The ik_ctl drives the scapulaAimTarget so in IK mode the scapula
-        # automatically tracks where the foot is going.
-        # In FK mode the foot tip (fk_ref) is used instead, blended by the
-        # IK/FK blend so both modes feed the scapula naturally.
+        # ── Auto-Scapula: pure DG connection, no constraints ──────────────
+        #
+        # 1. Decompose ik_ctl world matrix to get its world-space position.
+        # 2. pointMatrixMult multiplies that position by scapula_npo inverse
+        #    world matrix → gives ik_ctl position in scapula local space.
+        # 3. The swing angle is atan(localZ / -localY):
+        #    -localY is the "rest down" length; localZ is forward deviation.
+        #    An animCurveUU samples the true atan function in degrees.
+        # 4. Multiply by autoScapula (0-1).
+        # 5. Connect to scapula_npo.rotateZ (forward-swing axis for a Y-down
+        #    leg where X is the bone primary axis).
 
-        # Keep the aim target snapped to the IK foot control at all times.
-        pm.pointConstraint(self.ik_ctl, self.scapulaAimTarget, mo=False)
-
-        # Build the auto-aim on scapula_aim (child of scapula_npo).
-        # We aim the scapula_aim along the down-axis of the leg (xz plane)
-        # toward the foot target.  The world-up keeps it stable.
-        # Constraint weight is driven by autoScapula attribute.
-        aim_cns = pm.aimConstraint(
-            self.scapulaAimTarget,
-            self.scapula_aim,
-            maintainOffset=True,
-            aimVector=(0, -1, 0),   # -Y points down the leg
-            upVector=(0, 0, 1),
-            worldUpType="objectrotation",
-            worldUpVector=(0, 0, 1),
-            worldUpObject=self.scapula_npo,
-            weight=1,
+        dec_ik = pm.createNode(
+            "decomposeMatrix", name=self.getName("scap_decIK")
         )
-        # Drive the aim constraint weight with autoScapula attribute.
-        # When autoScapula=0 the aim weight=0 (rest pose holds).
-        pm.connectAttr(self.autoScapula_att, aim_cns + ".w0", force=True)
+        pm.connectAttr(
+            self.ik_ctl.attr("worldMatrix[0]"), dec_ik + ".inputMatrix"
+        )
 
-        # ── Original leg_3jnt_01 operators (unchanged below) ──────────────
+        pmm = pm.createNode(
+            "pointMatrixMult", name=self.getName("scap_pmm")
+        )
+        pm.connectAttr(dec_ik + ".outputTranslate", pmm + ".inPoint")
+        pm.connectAttr(
+            self.scapula_npo.attr("worldInverseMatrix[0]"), pmm + ".inMatrix"
+        )
+
+        # negate localY so "straight down" is positive (rest pose = positive)
+        neg_y = pm.createNode(
+            "multiplyDivide", name=self.getName("scap_negY")
+        )
+        neg_y.attr("operation").set(1)
+        neg_y.attr("input2X").set(-1.0)
+        pm.connectAttr(pmm + ".outputY", neg_y + ".input1X")
+
+        # ratio = localZ / -localY
+        div_ratio = pm.createNode(
+            "multiplyDivide", name=self.getName("scap_ratio")
+        )
+        div_ratio.attr("operation").set(2)
+        pm.connectAttr(pmm + ".outputZ", div_ratio + ".input1X")
+        pm.connectAttr(neg_y + ".outputX", div_ratio + ".input2X")
+
+        # atan lookup curve: maps ratio → degrees
+        atn = pm.createNode("animCurveUU", name=self.getName("scap_atan"))
+        atn.attr("preInfinity").set(1)   # linear
+        atn.attr("postInfinity").set(1)  # linear
+        for u, v in [
+            (-10.0, -84.289),
+            (-2.0,  -63.435),
+            (-1.0,  -45.0),
+            (-0.5,  -26.565),
+            ( 0.0,    0.0),
+            ( 0.5,   26.565),
+            ( 1.0,   45.0),
+            ( 2.0,   63.435),
+            (10.0,   84.289),
+        ]:
+            pm.setKeyframe(
+                atn, float=u, value=v,
+                inTangentType="linear", outTangentType="linear"
+            )
+        pm.connectAttr(div_ratio + ".outputX", atn + ".input")
+
+        # scale by autoScapula attribute
+        mul_auto = pm.createNode(
+            "multiplyDivide", name=self.getName("scap_mulAuto")
+        )
+        mul_auto.attr("operation").set(1)
+        pm.connectAttr(atn + ".output", mul_auto + ".input1X")
+        pm.connectAttr(self.autoScapula_att, mul_auto + ".input2X")
+
+        # connect angle to scapula_npo.rotateZ
+        pm.connectAttr(mul_auto + ".outputX", self.scapula_npo + ".rotateZ")
+
+        # ── Original leg_3jnt_01 operators (unchanged) ────────────────────
 
         soft_cond_node = node.createConditionNode(
             self.soft_attr, 0.0001, 4, 0.0001, self.soft_attr
@@ -809,7 +841,7 @@ class Component(component.Main):
 
         # 1 bone chain Upv ref
         self.ikHandleUpvRef = primitive.addIkHandle(
-            self.scapula_ctl,
+            self.root,
             self.getName("ikHandleLegChainUpvRef"),
             self.legChainUpvRef,
             "ikSCsolver",
@@ -827,7 +859,6 @@ class Component(component.Main):
         pm.parentConstraint(self.mid1_jnt, self.knee_lvl)
         pm.parentConstraint(self.mid2_jnt, self.ankle_lvl)
 
-        # joint length multiply
         multJnt1_node = node.createMulNode(
             self.boneALenght_attr, self.boneALenghtMult_attr
         )
@@ -868,7 +899,6 @@ class Component(component.Main):
 
         pm.pointConstraint(self.root_ctl, self.chain3bones[0])
 
-        # softIK 3 bones
         applyop.aimCns(
             self.aim_tra,
             self.ik_ref,
@@ -1098,7 +1128,7 @@ class Component(component.Main):
         self.ikhArmRef, self.tmpCrv = applyop.splineIK(
             self.getName("legRollRef"),
             self.rollRef,
-            parent=self.scapula_ctl,
+            parent=self.root,
             cParent=self.legBones[0],
         )
 
@@ -1144,7 +1174,6 @@ class Component(component.Main):
         )
         self.volDriver_att = div_node2 + ".outputX"
 
-        # Flip offsets
         pm.connectAttr(self.ankleFlipOffset_att, self.tws2_loc.attr("rz"))
         pm.connectAttr(self.kneeFlipOffset_att, self.tws1_loc.attr("rz"))
 
@@ -1208,7 +1237,6 @@ class Component(component.Main):
         pm.parentConstraint(self.legBones[1], self.match_fk1_off, mo=True)
         pm.parentConstraint(self.legBones[2], self.match_fk2_off, mo=True)
 
-        # squash foot
         self.foot_squash_att >> self.squash_scl.sx
         self.foot_squash_att >> self.squash_scl.sz
         rev_nod = node.createReverseNode(self.foot_squash_att)
@@ -1220,7 +1248,6 @@ class Component(component.Main):
     # CONNECTOR
     # =====================================================
     def setRelation(self):
-        """Set the relation beetween object from guide to rig"""
         self.relatives["root"] = self.legBones[0]
         self.relatives["knee"] = self.legBones[1]
         self.relatives["ankle"] = self.legBones[2]
