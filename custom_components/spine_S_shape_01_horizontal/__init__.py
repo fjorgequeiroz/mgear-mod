@@ -1,4 +1,4 @@
-"""Component Spine IK 02 Horizontal module"""
+"""Component Spine S Shape 01 Horizontal module"""
 
 import mgear.pymaya as pm
 from mgear.pymaya import datatypes
@@ -36,15 +36,17 @@ class Component(component.Main):
                 j.drawStyle.set(2)
 
         # Ik Controlers ------------------------------------
+        # NOTE: Controls are oriented so that Y = up and Z = forward,
+        # just like global space controls.
         if self.settings["IKWorldOri"]:
             t = datatypes.TransformationMatrix()
             t = transform.setMatrixPosition(t, self.guide.apos[0])
         else:
             t = transform.getTransformLookingAt(
                 self.guide.apos[0],
-                self.guide.apos[-1],
-                self.guide.blades["blade"].z * -1,
-                "yx",
+                self.guide.apos[0] + datatypes.Vector(0, 0, 1),
+                self.guide.apos[0] + datatypes.Vector(0, 1, 0),
+                "zy",
                 self.negate)
 
         self.ik0_npo = primitive.addTransform(
@@ -272,9 +274,9 @@ class Component(component.Main):
 
         t = transform.getTransformLookingAt(
             self.guide.apos[0],
-            self.guide.apos[-1],
-            self.guide.blades["blade"].z * -1,
-            "yx",
+            self.guide.apos[0] + datatypes.Vector(0, 0, 1),
+            self.guide.apos[0] + datatypes.Vector(0, 1, 0),
+            "zy",
             self.negate)
 
         parent_twistRef = primitive.addTransform(
@@ -349,9 +351,9 @@ class Component(component.Main):
             # slerp solver behavior)
             t = transform.getTransformLookingAt(
                 self.guide.apos[0],
-                self.guide.apos[-1],
-                self.guide.blades["blade"].z * -1,
-                "yx",
+                self.guide.apos[0] + datatypes.Vector(0, 0, 1),
+                self.guide.apos[0] + datatypes.Vector(0, 1, 0),
+                "zy",
                 self.negate)
 
             twister = primitive.addTransform(
@@ -361,7 +363,7 @@ class Component(component.Main):
                 parent_twistRef, self.getName("%s_pos_ref" % i), t)
 
             ref_twist.setTranslation(
-                datatypes.Vector(1.0, 0, 0), space="preTransform")
+                datatypes.Vector(0, 1.0, 0), space="preTransform")
 
             self.twister.append(twister)
             self.ref_twist.append(ref_twist)
@@ -492,21 +494,21 @@ class Component(component.Main):
 
         # tan0
         mul_node = node.createMulNode(self.tan0_att,
-                                      self.tan0_npo.getAttr("ty"))
+                                      self.tan0_npo.getAttr("tz"))
 
         res_node = node.createMulNode(mul_node + ".outputX",
                                       div_node + ".outputX")
 
-        pm.connectAttr(res_node + ".outputX", self.tan0_npo.attr("ty"))
+        pm.connectAttr(res_node + ".outputX", self.tan0_npo.attr("tz"))
 
         # tan1
         mul_node = node.createMulNode(self.tan1_att,
-                                      self.tan1_npo.getAttr("ty"))
+                                      self.tan1_npo.getAttr("tz"))
 
         res_node = node.createMulNode(mul_node + ".outputX",
                                       div_node + ".outputX")
 
-        pm.connectAttr(res_node + ".outputX", self.tan1_npo.attr("ty"))
+        pm.connectAttr(res_node + ".outputX", self.tan1_npo.attr("tz"))
 
         # Tangent Mid --------------------------------------
         if self.settings["centralTangent"]:
@@ -549,8 +551,9 @@ class Component(component.Main):
             cns = applyop.pathCns(
                 self.div_cns[i], self.slv_crv, False, u, True)
 
-            cns.setAttr("frontAxis", 1)  # front axis is 'Y'
-            cns.setAttr("upAxis", 0)  # front axis is 'X'
+            cns.setAttr("frontAxis", 0)  # front axis is 'X'
+            cns.setAttr("upAxis", 1)     # up axis is 'Y'
+            cns.setAttr("upTwist", 90)   # twist so Z is forward
 
             # Roll
             intMatrix = applyop.gear_intmatrix_op(
