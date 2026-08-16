@@ -551,7 +551,13 @@ class Component(component.Main):
             cns = applyop.pathCns(
                 self.div_cns[i], self.slv_crv, False, u, True)
 
-            cns.setAttr("frontAxis", 0)  # front axis is 'X'
+            if i == 0:
+                # at u close to 0 the curve tangent reads backward,
+                # so flip the front axis to -X to keep Z pointing at
+                # the child instead of behind the control
+                cns.setAttr("frontAxis", 3)  # front axis is '-X'
+            else:
+                cns.setAttr("frontAxis", 0)  # front axis is 'X'
             cns.setAttr("upAxis", 1)     # up axis is 'Y'
             cns.setAttr("upTwist", 90)   # twist so Z is forward
 
