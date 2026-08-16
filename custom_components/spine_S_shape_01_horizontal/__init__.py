@@ -44,8 +44,8 @@ class Component(component.Main):
         else:
             t = transform.getTransformLookingAt(
                 self.guide.apos[0],
-                self.guide.apos[0] + datatypes.Vector(0, 0, 1),
-                self.guide.apos[0] + datatypes.Vector(0, 1, 0),
+                self.guide.apos[-1],
+                datatypes.Vector(0, 1, 0),
                 "zy",
                 self.negate)
 
@@ -274,8 +274,8 @@ class Component(component.Main):
 
         t = transform.getTransformLookingAt(
             self.guide.apos[0],
-            self.guide.apos[0] + datatypes.Vector(0, 0, 1),
-            self.guide.apos[0] + datatypes.Vector(0, 1, 0),
+            self.guide.apos[-1],
+            datatypes.Vector(0, 1, 0),
             "zy",
             self.negate)
 
@@ -351,8 +351,8 @@ class Component(component.Main):
             # slerp solver behavior)
             t = transform.getTransformLookingAt(
                 self.guide.apos[0],
-                self.guide.apos[0] + datatypes.Vector(0, 0, 1),
-                self.guide.apos[0] + datatypes.Vector(0, 1, 0),
+                self.guide.apos[-1],
+                datatypes.Vector(0, 1, 0),
                 "zy",
                 self.negate)
 
