@@ -28,11 +28,11 @@ class Component(component.Main):
         # bank pivot
         # Aim the heel towards the first locator, but flat to the world.
         # So get the y component from itself.
-        heelLook = [
+        heelLook = datatypes.Vector(
                 self.guide.apos[-4][0],
                 self.guide.pos["heel"][1],
                 self.guide.apos[-4][2]
-                ]
+                )
         t = transform.getTransformLookingAt(self.guide.pos["heel"],
                                             heelLook,
                                             self.normal,
