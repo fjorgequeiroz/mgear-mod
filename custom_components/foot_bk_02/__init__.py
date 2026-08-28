@@ -209,6 +209,26 @@ class Component(component.Main):
         self.blend_att = self.addSetupParam(
             "blend", "Fk/Ik Blend", "double", 1, 0, 1)
 
+        # track match references for IK/FK match
+        self.root.addAttr("bk_ctl", at="message", m=True)
+        self.root.addAttr("fk_ctl", at="message", m=True)
+        for i, ctl in enumerate(self.bk_ctl):
+            pm.connectAttr(
+                ctl.message, self.root.attr("bk_ctl[{}]".format(str(i)))
+            )
+        for i, ctl in enumerate(self.fk_ctl):
+            pm.connectAttr(
+                ctl.message, self.root.attr("fk_ctl[{}]".format(str(i)))
+            )
+
+        self.root.addAttr("heel_ctl", at="message", m=False)
+        self.heel_ctl.message >> self.root.heel_ctl
+        self.root.addAttr("tip_ctl", at="message", m=False)
+        self.tip_ctl.message >> self.root.tip_ctl
+        if self.settings["useRollCtl"]:
+            self.root.addAttr("roll_ctl", at="message", m=False)
+            self.roll_ctl.message >> self.root.roll_ctl
+
     # =====================================================
     # OPERATORS
     # =====================================================
@@ -368,8 +388,14 @@ class Component(component.Main):
         pm.connectAttr(self.parent_comp.blend_att, self.blend_att)
         pm.parent(self.root, self.parent_comp.ik_ctl)
         pm.parent(self.parent_comp.ik_ref, self.bk_ctl[-1])
-        pm.parentConstraint(
-            self.parent_comp.tws2_rot, self.fk_ref, maintainOffset=True)
+        pm.parent(self.parent_comp.match_fk2, self.bk_ctl[-1])
+        pm.parent(self.fk_ref, self.parent_comp.tws2_rot)
+
+        # add message connections to parent component.
+        # this connection will be used to track the ctl relation when IK/FK
+        # match is performed
+        self.parent_comp.root.addAttr("footCnx", at="message", m=False)
+        self.root.message >> self.parent_comp.root.footCnx
 
         return
 
@@ -395,6 +421,12 @@ class Component(component.Main):
                        cns + ".%sW1" % self.parent_comp.ik_ref)
         pm.connectAttr(self.parent_comp.blend_att, bc_node + ".blender")
 
+        # add message connections to parent component.
+        # this connection will be used to track the ctl relation when IK/FK
+        # match is performed
+        self.parent_comp.root.addAttr("footCnx", at="message", m=False)
+        self.root.message >> self.parent_comp.root.footCnx
+
         return
 
     def connect_leg_3jnt_01(self):
@@ -407,7 +439,14 @@ class Component(component.Main):
         pm.parent(self.root, self.parent_comp.ik_ctl)
         pm.parent(self.parent_comp.ik_ref, self.bk_ctl[-1])
         pm.parent(self.parent_comp.ik2b_ikCtl_ref, self.bk_ctl[-1])
+        pm.parent(self.parent_comp.match_fk3, self.bk_ctl[-1])
         pm.parentConstraint(
             self.parent_comp.tws3_rot, self.fk_ref, maintainOffset=True)
+
+        # add message connections to parent component.
+        # this connection will be used to track the ctl relation when IK/FK
+        # match is performed
+        self.parent_comp.root.addAttr("footCnx", at="message", m=False)
+        self.root.message >> self.parent_comp.root.footCnx
 
         return
